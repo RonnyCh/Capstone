@@ -1,0 +1,490 @@
+---
+title: "Capstone Data Science"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Introduction
+
+This book is part of my final course to complete Data Science Program offered by Harvardx Online. 
+As part of the final exercise, I have to analyse Netflix data and apply the knowledge learn from the course to predict rating. 
+The benchmark of this exercise is to achieve RMSE as close as possible to 0.87 as per winning Netflix Competition.
+However, the capstone project requires accurarcy instead of RMSE so I'll explore this in this capstone project. 
+
+# 2. Dataset
+
+The dataset will be downloaded as per EDX coding and there will be two datasets :
+    1. EDX - for training dataset
+    2. Validation - for evaluation purpose
+
+I'll create a csv file to contain rating prediction based on validation table.
+
+```{r}
+
+#############################################################
+# Create edx set, validation set, and submission file
+#############################################################
+
+# Note: this process could take a couple of minutes
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+dl <- tempfile()
+download.file("http://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+
+ratings <- read.table(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
+                      col.names = c("userId", "movieId", "rating", "timestamp"))
+
+movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
+colnames(movies) <- c("movieId", "title", "genres")
+movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(levels(movieId))[movieId],
+                                           title = as.character(title),
+                                           genres = as.character(genres))
+
+movielens <- left_join(ratings, movies, by = "movieId")
+
+# Validation set will be 10% of MovieLens data
+
+set.seed(1)
+test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
+edx <- movielens[-test_index,]
+temp <- movielens[test_index,]
+
+# Make sure userId and movieId in validation set are also in edx set
+
+validation <- temp %>% 
+     semi_join(edx, by = "movieId") %>%
+     semi_join(edx, by = "userId")
+
+# Add rows removed from validation set back into edx set
+
+removed <- anti_join(temp, validation)
+edx <- rbind(edx, removed)
+
+# Learners will develop their algorithms on the edx set
+# For grading, learners will run algorithm on validation set to generate ratings
+
+#validation <- validation %>% select(-rating)
+
+# Ratings will go into the CSV submission file below:
+
+#write.csv(validation %>% select(userId, movieId) %>% mutate(rating = NA),
+#          "submission.csv", na = "", row.names=FALSE)
+#rm(dl, ratings, movies, test_index, temp, movielens, removed)
+```
+
+
+# 3. Algorithms
+
+I'll use some of the algorithms as explained in Machine Learning and apply different methodologies to improve RMSE and subsequently calculate accuracy.
+
+The following are the algorithms to be used in this project :
+1. Simple Average
+2. Movie Bias
+3. User Bias
+4. Regularisation 
+5. Factor Maximasation
+6. Recommenderlab
+
+
+# 3.1 Simple Average
+
+If we apply overall average against the test data, we can see the RMSE is about 1.06. This means roughly we are out by 1 star rating.
+How do I calculate this?
+    1. Calculate overall rating for EDX table, defined as mu_hat
+    2. Calculate RMSE between step 1 above vs rating column in validation table
+
+You can see from the code below, the final result is 1.06
+
+```{r}
+RMSE <- function(true_ratings, predicted_ratings){
+    sqrt(mean((true_ratings - predicted_ratings)^2))
+}
+
+mu_hat <- mean(edx$rating)
+simpleRMSE <- RMSE(mu_hat,validation$rating)
+rmse_results <- data_frame(method = "Simple Avg", RMSE = simpleRMSE)
+rmse_results
+```
+
+# 3.2 Movie Bias
+
+What is movie bias? Movie bias is the difference in rating between the average of a specific movie vs mu_hat of ~3.5.
+For example, the movie Pulp Fiction has **_movie bias_** of -0.64.
+
+Overall rating for this movie is 4.15 whilst the mu_hat is 3.5 giving a difference of -0.64. 
+
+```{r}
+overall <- mean(edx$rating)
+edx %>% group_by(movieId, title) %>% filter(title=='Pulp Fiction (1994)') %>% summarise(movieRating = mean(rating), Overall= overall, diff=overall-movieRating)
+```
+
+This difference will be called b_i and we can calculate the full training data using the code below.
+
+```{r}
+movieBias <- edx %>% group_by(movieId) %>% summarise(b_i = mean(rating-mu_hat))
+```
+
+
+Now, we're going to include movie bias for each movie and add that to the overall average.
+The code below will show how we link the train dataset to movieBias dataset to get movie bias or *b_i*
+The RMSE is also calculated to see if there is any improvement against the simple average in the first method above.
+
+It can be seen RMSE has improved from 1.06 to 0.94 by including movie bias. 
+
+```{r}
+prediction <- mu_hat + edx %>% left_join(movieBias,by='movieId') %>% .$b_i 
+movieRMSE1 <- RMSE(prediction,edx$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Movie Bias No Lambda",  
+                                     RMSE = movieRMSE1 ))
+rmse_results
+```
+
+# 3.3 Applying regularisation (lambda) to movie bias
+
+What is regularisation or lambda?
+It is a modelling concept where you add value to penalise, in our case rating, due to lower rating received by a movie. 
+
+For example : 
+* Movie A has 20 rating with average of 3.5  
+* Movie B has 1 rating with average of 5
+
+Is it fair to say movie B is a better movie than A? Probably no because it only has 1 user with rating of 5. 
+To get around this issue, you can add additional value to penalise the n so movie B will decrease in terms of average. 
+
+For example we add lambda of 2
+* Movie A = (20 * 3.5)/(20 + 2) = 3.18
+* Movie B = 5/(1+2) = 1.66
+
+As you can see, movie A now has a better avg rating than movie B
+
+
+# How do you figure out the optimal lambda?
+
+You can create a function in R to go through a sequence of numbers and calculate RMSE for each. 
+Lambda with the best RMSE will be the optimal lambda, in our case 2.5. 
+```{r}
+lambdas <- seq(0,20,0.25)
+
+rmse <- sapply(lambdas,function(x)
+{movieBias <- edx %>% group_by(movieId) %>% summarise(b_i = sum(rating-mu_hat)/(n()+x))
+prediction <- mu_hat + edx %>% left_join(movieBias,by='movieId') %>% .$b_i 
+return(movieRMSE <- RMSE(prediction,train$rating))}
+  )
+
+qplot(lambdas,rmse)
+lambdas[which.min(rmse)]
+```
+
+
+Applying lambda 2.5 to the model and calculate RMSE for movie bias.
+```{r}
+movieBias <- edx %>% group_by(movieId) %>% summarise(b_i = sum(rating-mu_hat)/(n()+2.5))
+prediction <- mu_hat + edx %>% left_join(movieBias,by='movieId') %>% .$b_i 
+movieRMSE2 <- RMSE(prediction,edx$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Movie Bias With Lambda",  
+                                     RMSE = movieRMSE2 ))
+rmse_results
+```
+
+It seems that adding lambda to movie bias does not improve RMSE. Hence, lambda will not be applied to movie bias.  
+
+
+Now, let's apply user bias to the model with and without lambdas.
+```{r}
+userBias <- edx %>% left_join(movieBias,by='movieId') %>% group_by(userId) %>% summarize(b_u = mean(rating-mu_hat))
+prediction <- edx %>% left_join(userBias,by='userId') %>% left_join(movieBias,by='movieId') %>% mutate(pred = mu_hat + b_u + b_i) %>% .$pred
+movieRMSE3 <- RMSE(prediction,edx$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Movie and User no lambdas",  
+                                     RMSE = movieRMSE3 ))
+rmse_results
+```
+
+
+Adding user bias to the model adding improving the RMSE to 0.8765.
+The result looks pretty good and getting closer to benchmark of 0.87.
+
+
+# Finding optimal lambda to user bias 
+```{r}
+
+lambdas <- seq(0,20,0.25)
+
+rmse <- sapply(lambdas, function(x) 
+{
+userBias <- edx %>% left_join(movieBias,by='movieId') %>% group_by(userId) %>% summarize(b_u = sum(rating-mu_hat)/(n() + x))
+prediction <- edx %>% left_join(userBias,by='userId') %>% left_join(movieBias,by='movieId') %>% mutate(pred = mu_hat + b_u + b_i) %>% .$pred
+return(RMSE(prediction,edx$rating))}
+)
+
+qplot(lambdas,rmse)
+lambdas[which.min(rmse)]
+
+```
+
+Contrary to movie bias, it does make improvement to RMSE after adding lambda.
+Hence our final model will be using mu_hat + b_i + b_u (with lambda of 20) 
+
+```{r}
+
+
+userBias <- edx %>% left_join(movieBias,by='movieId') %>% group_by(userId) %>% summarize(b_u = sum(rating-mu_hat)/(n()+25))
+prediction <- edx %>% left_join(userBias,by='userId') %>% left_join(movieBias,by='movieId') %>% mutate(pred = mu_hat + b_u + b_i) %>% .$pred
+movieRMSE4 <- RMSE(prediction,edx$rating)
+rmse_results <- bind_rows(rmse_results,
+                          data_frame(method="Movie and User with lambdas 25",  
+                                     RMSE = movieRMSE4 ))
+rmse_results
+```
+
+So, applying lambda to user only does improve RMSE slightly.
+I'm wondering if I expand the range of lambda to 20 whether it will improve it more. 
+
+
+# Capstone challenge using accuracy
+
+One of the issues raised by users in forum is regarding the use of accuracy in final result. 
+This is slightly different to how it's been taught in the course where RMSE is mainly used. 
+
+To use accuracy, I have to create a function to convert prediction to closest rounding rating. 
+In the intial table, you can see users can give rating from 0.5 to 5. 
+There are a lot of rating within .5 mark such as 3.5, 4.5 etc. 
+
+```{r}
+tmp <- data.frame(rating = prediction)
+
+tmp$rating2 <- sapply(tmp$rating,function(x)
+{
+  if(x>0.2 & x<=0.7) {x=0.5}
+  else if(x>0.7 & x<=1.45) {x=1}
+  else if(x>1.45 & x<=1.55) {x=1.5}
+  else if(x>1.55 & x<=2.45) {x=2}
+  else if(x>2.45 & x<=2.55) {x=2.5}
+  else if(x>2.55 & x<=3.45) {x=3}
+  else if(x>3.45 & x<=3.55) {x=3.5}
+  else if(x>3.55 & x<=4.45) {x=4}
+  else if(x>4.45 & x<=4.55) {x=4.5}
+  else if(x>4.55 & x<=5.45) {x=5}
+  else {1}
+}
+  )
+```
+
+
+After converting the rating to approriate format, the below code will insert the predicted figures to test data
+```{r}
+
+edx$prediction <- tmp$rating2
+
+#validation$prediction[validation$prediction==3 & validation$rating==4] <- 4
+#validation$prediction[validation$prediction==3.5 & validation$rating==4] <- 4
+#validation$prediction[validation$prediction==4 & validation$rating==3] <- 3
+#validation$prediction[validation$prediction==3 & validation$rating==2] <- 2
+#validation$prediction[validation$prediction==3.5] <- 4
+b <- factor(edx$rating)
+a <- factor(edx$prediction)
+confusionMatrix(a,b)
+```
+
+
+# Low Accuracy of 33%
+It's quite surprise to see the results score a very low accuracy of 33% despite RMSE around 0.87. 
+
+I think one of the issues I notice is at higher level the rating is comparable to prediction.
+However, there are a lot of noises at lower level rating causing mismatch at predicting the correct rating. 
+
+That's one of the challenges to go down to that lower level to give correct prediction. 
+In the next section I'll try to predict using *recommenderlab* to see how much improvement you'll gain from this method.
+
+For example, let's look at Star Trek rating vs prediction. 
+
+1. At high level, the difference is merely 0.03 which is pretty good.
+2. But you'll see accuracy is pretty bad with 66% prediction is wrong. 
+3. If you break it down to rating, the results look bad in every rating.
+
+```{r}
+edx %>% group_by(movieId,title) %>% filter(movieId==858) %>% summarise(actual = mean(rating), pred = mean(prediction), diff = actual-pred)
+```
+
+
+# Checking residual for some of the top movies after applying final methodology
+
+# check users with residual only
+
+Below table will show those that don't match, what are the differences. 
+```{r}
+myresidual <- edx %>% mutate(chk=ifelse(rating==prediction,'OK','Not')) %>% filter(chk=='Not') 
+myresidual %>% group_by(rating) %>% summarise(mean(prediction), n())
+```
+
+```{r}
+# rating is higher than prediction but less than 1 (absolute numbers only)
+myresidual %>% mutate(error=rating-prediction) %>% filter(error>0 & error<1) %>% group_by(movieId,title) %>% summarise(tot=sum(error)) %>% arrange(desc(tot))
+
+
+# rating is higher than prediction and greater than 1
+myresidual %>% mutate(error=rating-prediction) %>% filter(error>1) %>% group_by(movieId,title) %>% summarise(tot=sum(error)) %>% arrange(desc(tot))
+```
+
+
+#let's user dumb & dumber as an example and try to find factor for users and movies.
+
+Users : who rate higher than prediction and who rate lower than prediction
+Movie : create movie preference. 
+
+```{r}
+edx %>% filter(movieId==231) %>% summarise(mean(edx$rating))
+myresidual %>% filter(movieId==231 & rating>prediction) %>% head(10)
+myresidual %>% filter(movieId==231 & rating<prediction) %>% head(10)
+
+
+
+# pick up some users to see their preferences
+
+# 1. loves dumb and dumber (userid==36)
+edx %>% filter(userId==36 & genres=='Comedy') %>% arrange(title)
+
+# 2. hates dumb and dumber(userid==4)   probably hate jim carrey
+edx %>% filter(userId==4 & genres=='Comedy') %>% arrange(title)
+```
+
+
+
+# Recommender Lab
+
+# pick up the top50 rating 
+```{r}
+library(dplyr)
+train_small <- edx %>% 
+  group_by(movieId) %>%
+  filter(n() >= 50) %>% ungroup() %>% 
+  group_by(userId) %>%
+  filter(n() >= 50) %>% ungroup()
+
+
+
+y <- train_small %>% 
+  select(userId, movieId, rating) %>%
+  spread(movieId, rating) %>%
+  as.matrix()
+
+rownames(y)<- y[,1]
+y <- y[,-1]
+
+movie_titles <- edx %>% 
+  select(movieId, title) %>%
+  distinct()
+
+colnames(y) <- with(movie_titles, title[match(colnames(y), movieId)])
+```
+
+
+
+# User Recommender Lab 
+```{r}
+library(recommenderlab)
+y2 <- y
+#y2[is.na(y2)] <- 0
+y2 <- as(y2, "realRatingMatrix")
+rec <- Recommender(y2, method = "POPULAR")
+```
+
+
+
+# Issue with R performance 
+I've encountered issue predicting the whole 42k users at once with several crashes with Imac. 
+As a result of this, I've decided to reduce to $10k users to validate RMSE and accuracy.
+
+```{r}
+pre1 <- predict(rec, y2[1:10000], type="ratings")
+```
+
+
+# convert to dataframe and map it against validation data
+```{r}
+# convert to datframe and tidyup user id to numeric
+prediction <- as(pre1,"data.frame")
+
+prediction$id <- as.numeric(as.character(prediction$user))
+prediction$title <- as.character(prediction$item)
+colnames(prediction) <- c('user','item','rating','userId','title')
+prediction <- prediction %>% select(-user,-item)
+prediction$movieId <- with(movie_titles, movieId[match(prediction$title, title)])
+str(prediction)
+head(prediction)
+```
+
+
+# RMSE 
+```{r}
+tmp <- validation %>% inner_join(prediction,by=c('userId','movieId'))
+dim(tmp)
+RMSE(tmp$rating.x,tmp$rating.y)
+```
+
+The RMSE from recommenderlab showing the outcome similar to our previous method and achieving result around 0.87. 
+Predicted rating outcome will need to be converted to proper format before doing confusion matrix.
+
+
+```{r}
+
+tmp$rating2 <- sapply(tmp$rating.y,function(x)
+{
+  if(x>0.2 & x<=0.7) {x=0.5}
+  else if(x>0.7 & x<=1.45) {x=1}
+  else if(x>1.45 & x<=1.55) {x=1.5}
+  else if(x>1.55 & x<=2.45) {x=2}
+  else if(x>2.45 & x<=2.55) {x=2.5}
+  else if(x>2.55 & x<=3.45) {x=3}
+  else if(x>3.45 & x<=3.55) {x=3.5}
+  else if(x>3.55 & x<=4.45) {x=4}
+  else if(x>4.45 & x<=4.55) {x=4.5}
+  else if(x>4.55 & x<=5.45) {x=5}
+  else {1}
+}
+  )
+
+b <- as.factor(tmp$rating.x)
+a <- as.factor(tmp$rating2)
+confusionMatrix(a,b)
+
+```
+
+
+As can be see, the final outcome has not changed and remain around ~34% mark using recommender lab based on ~ 200,000 samples. 
+This is about 20% of the overall validation dataset but enough to convince me that accurarcy will not go higher and around ~34% mark.
+As a result of this, we can say RMSE is quite optimal around 0.87 and accuracy is only gonna be around ~34% mark. 
+
+
+# queries to validate why accuracy is so low. Let's pick up home alone
+```{r}
+tmp %>% group_by(movieId,rating.x) %>% filter(movieId==586) %>% summarise(pred=round(mean(rating2==rating.x),3)*100, count=n())
+```
+
+
+# finding
+
+There are factors that are quite hard to predict to make sure accurate rating is predicted. 
+For example :
+
+1. Some users hate specific movie or actors etc.
+2. The above data deviates from his/her overall bias. 
+```{r}
+tmp %>% group_by(movieId,rating.x) %>% filter(movieId==586 & rating.x==4) 
+```
+
+```{r}
+head(movieBias)
+```
+
