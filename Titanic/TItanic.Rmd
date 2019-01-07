@@ -3,6 +3,7 @@ title: "Titanic Project"
 output:
   html_document:
     df_print: paged
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -12,9 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## 1. Introduction
 
-I've chosen Titanic as part of my final capstone project for this Data Science Program. The dataset comes from Kaggle as part of intro to Kaggle prediction competitions. Most people probably know what happened to Titanic and might have watched the movie as well.Titanic sank on April 15, 1912 after colliding with iceberg killing 1502 out of 2224 passengers and crew. 
+I have chosen Titanic as part of my final capstone project for this Data Science Program. The dataset comes from Kaggle as part of introduction to Kaggle prediction competitions. Most people might have watched the popular movie Titanic and knew what happened to the ship. Just in case you do not know, Titanic sank on April 15, 1912 after colliding with iceberg killing 1502 out of 2224 passengers and crew. In this challenge, each Kaggle user is required to predict whether a passanger survived this tragedy. 
 
-In this challenge, kaggle user is required to predict whether a passanger survived this tragedy. I think this is a good introductory challenge where I can apply some of the techniques learnt during HarvardX Data Science Program.
+I think this is a good introductory challenge where I can apply some of the techniques learnt during HarvardX Data Science Program. At the same time, it will be easier to follow by others for peer grading since most people are quite new with machine learning. 
 
 The dataset contains 9 features as per below to predict label **_survival_** :
 
@@ -28,9 +29,9 @@ The dataset contains 9 features as per below to predict label **_survival_** :
  * cabin  
  * embarked  
 
-[For more information on the definitions of those features please click here]*(https://www.kaggle.com/c/titanic/data)*
+For more information on the definitions of those features [please click here](https://www.kaggle.com/c/titanic/data)
 
-I will apply some of the techniques learnt from this program such as :  
+We have learnt some of the techniques below in the last 6 months or so and I will use them to predict the outcome of **_Titanic Survival Challenge_**.  
 
  * Data Wrangling  
  * Caret Package  
@@ -38,19 +39,14 @@ I will apply some of the techniques learnt from this program such as :
  * Cross Validation  
  * Confusion Matrix  
  * Ggplot2  
- * Summarising with DPLYR  
+ * Summarising with Dplyr
+ * RMarkdown
 
 
 
 ## 2.Dataset 
 
-The dataset for this exercise comes from Kaggle which I downloaded to my local drive.
-There are two files in Kaggle :  
-
- * Train - for training the model  
- * Test - to validate our prediction  
-
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE}
 # download all libraries
 library(ggplot2)
 library(caret)
@@ -58,116 +54,195 @@ library(dplyr)
 library(ggthemes)
 ```
 
+The dataset for this exercise comes from Kaggle which I downloaded to my local drive.
+There are two files in Kaggle :  
+
+ * Train - for training the model  
+ * Test - to validate our prediction  
+ 
+The test data is without label and you will find out your score only after uploading csv to Kaggle online. For the purpose of this exercise I will be using purely train data which I will split to train and test datasets. This is to make it easier to use confusion matrix to validate my result against the test dataset label later on. 
+
 
 ```{r}
-setwd("/Users/Ronny/EDX_MachineLearning/Titanic")
-train <- read.csv("train.csv")
-test <- read.csv("test.csv")
+#setwd("/Users/Ronny/EDX_MachineLearning/Titanic")
+download <- read.csv("train.csv")
 ```
 
+
+A quick check on the download data showing the class of each feature as well as number of observations and variables.
 ```{r}
-dim(train)
-summary(train)
-summary(test)
+str(download)
 ```
 
-## 2.1 Reviewing the initial source data
+## 2.1 Reviewing downloaded data from Kaggle
 
-After importing the data and reviewing the summary for both tables, I can see the following anomalies
+After importing the data, I review the structure of the table to see what data wrangling required. 
 
- * Some of the features can be converted to factors such as Survived and Pclass
- * A lot of NAs in Age  
- * 1 NA in Fare in test table only  
- * The max value for Fare is significantly higher compared to mean and median. For example in train$fare, mean = 32.2 and median = 14.45 whilst max value = 512.33. 
-
-
-## 2.2 Removing NAs
-I'm going to replace all these NAs with average value for each field and will leave the fare issue for later since I'm not sure how significant this information will be yet. 
-
+ * Survived and Pclass are currently integer but can be converted to factors
+ 
+ * The Age feature has  a lot of NAs, in this case 177.
+ 
 ```{r}
-# fix the train data due to NA issue
-avg <- median(train$Age, na.rm = TRUE)
-train$Age <- replace(train$Age,is.na(train$Age),avg)
-
-# fix the test data due to NA issue
-avg <- median(test$Age, na.rm = TRUE)
-test$Age <- replace(test$Age,is.na(test$Age),avg)
-
-# there is also one NA under FARE for test data and this will be fixed as well.
-avg <- median(test$Fare, na.rm = TRUE)
-test$Fare <- replace(test$Fare,is.na(test$Fare),avg)
+summary(download$Age)
+```
+ 
+ 
+ * Fare has some outliers where you can see max value is a lot higher than mean and median
+ 
+```{r}
+summary(download$Fare)
 ```
 
-## 2.3 Converting to factors
+ * There are two entries missing embarkation points
+```{r}
+summary(download$Embarked)
+```
+
+
+
+## 2.2 Converting to factors
+
+Both Survived and Pclass have now been converted to factors as can be seen below
 ```{r}
 
 # convert train dataset
-train$Survived <- factor(train$Survived)
-train$Pclass <- factor(train$Pclass)
+download$Survived <- factor(download$Survived)
+download$Pclass <- factor(download$Pclass)
 
-# convert test dataset
-test$Pclass <- factor(test$Pclass)
+str(download$Survived)
+str(download$Pclass)
 
 ```
 
 
+## 2.3 Removing NAs
 
-## 2.3 Validation in both datasets to make sure no more NAs
-```{r, echo=FALSE}
-summary(train)
+I will replace all these NAs with mean values for each field.
+
+```{r}
+# fix NAs for Age
+avg <- mean(download$Age, na.rm = TRUE)
+download$Age <- replace(download$Age,is.na(download$Age),avg)
+
+# fix NAs for Fare
+avg <- mean(download$Fare, na.rm = TRUE)
+download$Fare <- replace(download$Fare,is.na(download$Fare),avg)
+
 ```
 
 
-```{r, echo=FALSE}
-summary(test)
+  * Confirmed no more NAs in Age
+```{r}
+summary(download$Age)
 ```
+
+  * Confirmed no more NAs in Fare
+```{r}
+summary(download$Fare)
+```
+
+
+## 2.4 Replacing missing embarkation points
+
+Converting the two rows to default value S as most people embarked from Southampton.
+```{r}
+download$Embarked[!(download$Embarked %in% c('C','Q','S'))] <- 'S'
+summary(download$Embarked)
+```
+
+
+
+## 2.4 Splitting the data to train and test
+
+Now, I will split the data to 80% training and 20% test. The below dim function confirms our dataset has now been partitioned properly.
+
+```{r}
+# create partition on test data
+set.seed(1)
+index <- createDataPartition(download$Survived,times = 1,p=0.8,list=FALSE)
+train <- download[index,]
+test <- download[-index,]
+
+# check the dimesions
+dim(download)
+dim(train)
+dim(test)
+```
+
+
 
 ## 3. Visualisation
 
-We know a lot of people died in this tragedy and from train table we can see :
-
-  * 549 people died
-  * 342 survived
+We know a lot of people did not survive this tragedy and we can use table function to see the actual numbers in our dataset. 
+In actual dataset, 0 means died and 1 means survived. 
   
-```{r, echo=FALSE}
-train %>% group_by(Survived) %>% summarise(Count=n()) 
+```{r}
+#train %>% group_by(Survived) %>% summarise(Count=n()) %>% knitr::kable()
+table(train$Survived)
 ```
 
-However, can we get more more insights on what sort of people survived this tragedy? I'll be using ggplot to drill down further on different features to get more insights. 
+
+However, we need to get more more insights on what sort of people survived this tragedy. I will be using ggplot to drill down further on different features to get more insights. 
 
 
 ## 3.1 Sex
 
-Generally during any major disasters, women and kids will be given priority whilst the men will do the hardwork to help others escape the disasters. We're going to see here if that assumption is also true for titanic without taking into account age or in this case children category. 
+Generally during any major disasters, women and kids will be given priority whilst the men will do the hardwork to help others escape the disasters. 
+
+
+```{r}
+num <- table(train$Sex,train$Survived)
+pct <- round(prop.table(table(train$Sex,train$Survived),1),3) * 100
+tbl <- cbind(num,pct)
+colnames(tbl) <- c('Died','Survived','Died (%)','Survived (%)')
+tbl
+
+```
+
+As you can see above, only 18.8% of men survived compared to 75.3% of women. If you happened to be in Titanic at that time and a male, your chance is not that great!
+
+Let's see if we can drill down to kids category just to prove the above assumption. I make assumption kids as everyone under 15 years. 
+
+
+```{r}
+kids <- train %>% filter(Age<=15)
+num <- table(kids$Sex,kids$Survived)
+pct <- round(prop.table(table(kids$Sex,kids$Survived),1),3) * 100
+tbl <- cbind(num,pct)
+colnames(tbl) <- c('Died','Survived','Died (%)','Survived (%)')
+tbl
+
+```
+
+We can see male kids had 54.8% chance to survive compared to overall male of 18.8%. It does prove my assumption women and kids were given priority to life support. 
+
+
+Let's go back analysing the feature sex and the below plot helps to visualise the the different statistics in one plot.
+
 
 ```{r, echo=FALSE}
 
-gender <- train %>%
+tbl <- train %>%
   group_by(Sex) %>%
   summarise(Count = n())
 
-gender
 
-gender_ratio <- train %>%
+
+tbl_ratio <- train %>%
   group_by(Sex, Survived) %>%
   summarise(Count = n()) %>%
   mutate(Percentage = round(Count/sum(Count)*100))
 
-gender_ratio
 
-```
-
-
-```{r, echo=FALSE}
 train %>%
   ggplot() +
   geom_bar(aes(x = Sex, fill = Survived)) +
-  geom_text(data = gender, 
+  geom_text(data = tbl, 
             aes(x = Sex, y = Count, label = Count), 
             position = position_dodge(width=0.9), 
             vjust=-0.25, 
             fontface = "bold") +
-  geom_label(data = gender_ratio, 
+  geom_label(data = tbl_ratio, 
              aes(x = Sex, y = Count, label = paste0(Percentage, "%"), group = Survived), 
              position = position_stack(vjust = 0.5)) +
   theme_few() +
@@ -178,11 +253,8 @@ train %>%
   scale_fill_discrete(name = "Outcome", labels = c("Died", "Survived"))  
 ```
 
-From the above plot, we can see the following :  
 
- * 74% of female passengers survived  
- * 19% of male passengers survived  
- 
+The above plot gives us enough statistic to what we have discussed above in one great summary.  
 Hence, my initial assumption is correct for Titanic and gender is also a good feature for modelling since it has a really good split between died and survived. 
 
 ## 3.2 Pclass 
@@ -229,7 +301,7 @@ From the above plot, we can see the following :
 
  * 63% of passengers in class 1 survived  
  * 47% of passengers in class 2 survived  
- * 24% of passengers in class 3 survived  
+ * 25% of passengers in class 3 survived  
 
 It does validate my assumptions as we can see if you happened to be in Titanic at that time and bought a ticket in passenger class 3, then you were most likely not going to survive. 
 
@@ -242,124 +314,147 @@ In Titanic dataset, there are two features that are quite similar :
  * Parch - travelling with parents or children
  * Sibsp - travelling with sibbling or spouses
 
-I'm not sure if there are any different between the two and I personally think they should be grouped as **_travelling with families_**.
+I am not sure if there are any different between the two and I personally think they should be grouped as **_FamilySize_**.
 Logically, family members will try to help each other to survive the ordeal and probably have better chance since they work in a group.
 
-In the code, I group all passengers with zero Parch and SibSp as **_single_** and everyone else as **_family_**
-```{r, echo=FALSE}
+I am going to create a new feature called **_FamilySize_** which is the sum of **_Parch_** and **_SibSp_**. I also added 1 in the end which is basically that person itself otherwise you just count your other family members excluding you.
+
+```{r}
 # group to determine family/single
-train$status <- 'Family'
-train$status[train$Parch==0 & train$SibSp==0] <- 'Single'
-train$status <- factor(train$status)
+train$FamilySize <- train$Parch + train$SibSp + 1
 
 # work out the composition of the data
-a <- prop.table(table(train$status)) * 100
-b <- table(train$status)
+a <- prop.table(table(train$FamilySize)) * 100
+b <- table(train$FamilySize)
 rbind(Count = b,Pctg = round(a,1))
 ```
 
-This new grouping is called **status** and added as a new feature in training dataset. It can be seen that almost 40% of passengers travelling with their families whilst 60% are singles.
+From the above table we can see the following observations :
 
-
-```{r, echo=FALSE}
-
-# create tbl and ratio for geom text and geom label
-tbl <- train %>%
-  group_by(status) %>%
-  summarise(Count = n())
-
-tbl_ratio <- train %>%
-  group_by(status, Survived) %>%
-  summarise(Count = n()) %>%
-  mutate(Percentage = round(Count/sum(Count)*100))
-
-# ggplot to put everything in one plot
-train %>%
-  ggplot() +
-  geom_bar(aes(x = status, fill = Survived)) +
-  geom_text(data = tbl, 
-            aes(x = status, y = Count, label = Count), 
-            position = position_dodge(width=0.9), 
-            vjust=-0.25, 
-            fontface = "bold") +
-  geom_label(data = tbl_ratio, 
-             aes(x = status, y = Count, label = paste0(Percentage, "%"), group = Survived), 
-             position = position_stack(vjust = 0.5)) +
-  theme_few() +
-  theme(plot.title = element_text(hjust = 0.5, size=18, color = "#054354")) +
-  ggtitle("Survival Rate by Status") +
-  scale_x_discrete(name= "Status") +
-  scale_y_continuous(name = "Passengers") +
-  scale_fill_discrete(name = "Outcome", labels = c("Died", "Survived"))  
-
-
-```
-
-An interesting finding from this, people with family had equal chance to survive compared to people who travelled alone. 
-I guess my assumption regarding family effort to work together to survive is most likely true in this scenario. 
-
-
-
-
-
+ * 61.5% travelling alone
+ * 17.2% travelling with another family
+ * 11.3% travelling with another 2 family members
+ * The remaining travelling with more than 2 family members
+ 
+Which groups had better chance to survive in this disaster?
+I use prop and table function again to show this. 
 
 ```{r}
-library(ggplot2)
-library(gridExtra)
-library(grid)
 
-# tidy one rows with no embarkation point and just put them to C ( 2 records only)
-subset(train,!(Embarked %in% c('C','Q','S')))
-train$Embarked[!(train$Embarked %in% c('C','Q','S'))] <- 'C'
-
-# ggplot using geom_bar for some of the features
-a <- ggplot(train, aes(x = factor(Sex), fill = factor(Survived))) + geom_bar(position='dodge')   
-b <- ggplot(train, aes(x = factor(Pclass), fill = factor(Survived))) + geom_bar(position='dodge')   
-c <- ggplot(train, aes(x = factor(Parch), fill = factor(Survived))) + geom_bar(position='dodge')   
-d <- ggplot(train, aes(x = factor(SibSp), fill = factor(Survived))) + geom_bar(position='dodge')   
-e <- ggplot(train, aes(x = factor(Embarked), fill = factor(Survived))) + geom_bar(position='dodge')   
-
-grid.arrange(a,b,c,d,e, ncol=2)
-
+num <- table(train$FamilySize,train$Survived)
+pct <- round(prop.table(table(train$FamilySize,train$Survived),1),3)*100
+tbl <- cbind(num,pct)
+colnames(tbl) <- c('Died','Survived','Died %','Survived %')
+tbl
 ```
 
+The table above show the split in terms of actual numbers on the left and percentages on the right.
+From there we can draw the following summary :
 
-Based on the visualisation above I can see the following information
-
-* Sex : if you are a male then you are likely to die  
-* Pclass (passenger class) : if you are in class 3 most likely you will die whilst if you are in class 1 you have higher chance to survive  
-* Parch (with parents or children) : we can see that people with values 1 or 2 have roughly equal chance to survive whilst people with value 0 most likely to die  
-* SibSp (with sibbling or spouse) : people with sibbling or spouse have roughly equal chance to survive  
-* Embarked : people who embarked from Queenstown and Southampton have higher chance to die compared to Cherbourg  
-
-I can see based on the data some of the information is quite logical. You would expect women and children to be given priority to lifeboats and other life support as what normally occur generally when a disaster occur.
-The same with people in class 1 where they pay more fees, you would expect they have better access to lifeboats and life support as well as less crowded than lower classes. 
-
-The other two features Parch and SibSp probably can be grouped together as another field called with family. It seems that people with families have roughly equal chance to survive than people without any families on board. 
-That's probably because they helped each other out to survive the disaster and hence they have slightly better chance to survive. However, I'm not sure whether the embarkation point is a good feature to use and probably is driven
-mainly by passenger class. 
-
-
-
-In the below bar plot, you can see that most people embarking from Cherbourg mostly survive because most of them sit in class 1 while most people from Southampton sit in class 3.
-Hence, I will not use embarked as a feature to use in random forest but rather just use passenger class. 
+ * Those passengers travelling in category 1,5,6 and 7 had between 16.7% to 42.9% chance to survive
+ * Those passengers with 2-3 family members had ~55% chance to survive
+ * Those passengers with 4 family members had 68% chance to survive
+ * Passengers travelling with 8 or more family members had 100% chance to die
+ 
 
 ```{r}
-ggplot(train, aes(x = factor(Embarked), fill = factor(Survived))) + geom_bar(position='dodge')  + facet_grid(Pclass~.)
+ggplot(data = train, aes(x=FamilySize)) + geom_bar(aes(fill=Survived)) + labs(x='Family Size', y='Tot Passengers', title='Family Size Survival') + theme_economist_white()
+
 ```
+
+When I plot the above statistic, we can see there were not that many families with 4 or more members. Those families who all died as per our train table probably only a small proportion of the whole dataset. Let's find out which families they were. 
+
+```{r}
+train %>% filter(FamilySize>7) %>% select(Name,Sex,Age, FamilySize, Pclass) %>% arrange(Name)
+```
+
+We found out from the results above, the two families were **_The Goodwin and The Sage_**. It also probably tells another story that bigger families struggled to get everyone on lifeboats and they probably sticked around to each other if they did not make it. Especially these two families were also in passenger class 3 and we know most people died in this class because of poor life support due to lower fares. 
+
+
+## 3.4 Embarked
+
+```{r}
+TotalPassenger <- table(train$Embarked)
+Pctg <- round(prop.table(table(train$Embarked)),3)*100
+Pctg <- Pctg[-1]
+TotalPassenger <- TotalPassenger[-1]
+rbind(TotalPassenger,Pctg)
+```
+
+There were three embarkation points for Titanic :
+
+ * C - Cherbourg in France
+ * Q - Queenstown in Ireland
+ * S - Southampton in England
+ 
+ 
+You can see from table, most people embarked from Southampton followed by Cherbourg and Queenstown. 
+I asked myself a question regarding this feature. Would it be logical to determine if someone survived based on his/her embarkation point?
+Initially, I was going to remove this feature from my model until I stumbled on this sample data below.
+
+If you look at the results in details you see a trend based on the same sex, pclass and family size. People embarked from Southampton had higher chance to die than people embarked from other ports. And this data is based on passenger class-3 and make me wondering why? The only thing I can think of is probably to do with the cabin location. Unfortunately, most of the rows have blank information in this field and I can't really use this field for my model. But, I believe people embarked from different ports for class-3 ended up in similar cabin locations in Titanic and unfortunately people from Southampton placed in locations where they were the hardest hit by iceberg. As a result of this, I will include embarked to be part of the features to determine if someone survived. 
+
+```{r}
+train %>% filter(Age==28 & Sex=='female' & Fare < 10) %>% select(Survived,Pclass,Name,Sex,Embarked,FamilySize) %>% arrange(desc(Embarked))
+```
+
+
+If you look at the plot below for passenger class-3, you will see the bar chart showing ~50% mark for Cherbourgh and Queenstown whilst Southampton was a lot worse than the other two.
+
+```{r}
+train %>% ggplot(aes(x=Pclass, fill=Survived)) + geom_bar() + facet_wrap(~Embarked) + theme_economist_white() + labs(title="Passenger Class by Embarked")
+```
+
+
+# 3.5 Age
 
 The next feature I want to analyse a bit further is Age and need to figure out how to group the age to help machine learning use it as another categorical feature. 
-There are two points that I want to analyse further :
-1.  Do a lot of kids survive?
-2. How about the older people like over 60?
+
+There are two points that I want to analyse further :  
+
+1. Did a lot of kids survive?  
+2. How about the older people like over 60?  
 
 
 ```{r}
-train$AgeGrp[train$Age<=12] <- 'Kids'
-train$AgeGrp[train$Age>12 & train$Age<=55] <- 'Adults'
-train$AgeGrp[train$Age>55] <- 'Seniors'
+p <- train %>% 
+  ggplot(aes(x = Age, fill=Survived)) 
+
+p + geom_density(alpha=0.5) + facet_wrap(~Sex) + labs(title="Age Feature") + theme_economist_white()
+```
+
+The above density plots give me the answers to my previuos questions 
+
+ * More male under 15 survived
+ * More male over 60 died
+ * Strange pattern in female under 15 requires further investigation
+ 
+
+Let's drill down the strange pattern for female under 15 using below code. 
+
+```{r}
+tmp <- train %>% filter(Age<15 & Sex=='female') 
+table(tmp$FamilySize,tmp$Survived)
+
+tmp %>% filter(FamilySize>4) %>% select(Name,Pclass,FamilySize,Sex,Age) %>% arrange(desc(FamilySize,Name))
+
+```
+
+Based on the data above, I could reveal the reason why they were a lot of female kids died. They were part of some big families already mentioned previouly where most of the family members died. These kids were part of Andersson, Asplund, Palsson and Skoog where they were families with more than 4 people. Unfortunately, these families were also in passenger class 3 which did not help with their chances to survive due to poor facilities etc. 
+
+I will create another categorical feature for Age and call it AgeGrp with three categories :
+
+ 1. Kids
+ 2. Adults
+ 3. Seniors
+
+```{r}
+train$AgeGrp[train$Age<=15] <- 'Kids'
+train$AgeGrp[train$Age>15 & train$Age<=59] <- 'Adults'
+train$AgeGrp[train$Age>59] <- 'Seniors'
 train$AgeGrp <- factor(train$AgeGrp)
 ```
+
 
 ```{r}
 a <- table(train$AgeGrp)
@@ -367,111 +462,242 @@ b <- prop.table(table(train$AgeGrp)) * 100
 rbind(Count=a,Pctg=round(b,1))
 ```
 
+The above is the new category for age group and we can see there were not many people seniors (above 59), only 2.9% of the sample size. But there were 65 kids (under 15) on board, roughly about 9.1% of total passengers in training dataset. Based on this new grouping, I am quite satisfied it can help predicting the outcome of test dataset later on.
+
 ```{r}
-train %>% filter(AgeGrp != 'Adults') %>% ggplot(aes(x = factor(Sex), fill = factor(Survived))) + geom_bar(position='dodge') + facet_grid(AgeGrp~Pclass)
+train %>% ggplot(aes(x=AgeGrp, fill=Survived)) + geom_bar() + theme_economist_white() + labs(title="Survival by Age Group")
 ```
 
-I'm grouping the Age to a new category called AgeGrp and consists of three categories :
 
-1. Kids
-2. Adults
-3. Seniors
+# 3.6 Fare
 
-Once the grouping is done it can be seen that proportion of Kids and Seniors are not very significant (less than 10%).
-
-* Adults : 87.8%
-* Kids : 7.8%
-* Seniors : 4.5%
-
-However, based on this new grouping it can be seen that male kids have better chance to survive as long as they are not in passenger class 3 where a lot kids die. This is quite consisten with the general consensus that people in passenger class 3 have less chance to survive compared to class 2 or class 1. We can also see people over 60 do not have a good chance to survive regardless of the passenger class they are in. 
-
-
-Now, I'm going to analyse the fields Parch and SibSp. From my point of view, this can be split into another category to determine if someone travelling by themselves or with families. It can be seen from the data below that about 40% of passengers have families travelling with them and 60% travelling by themselves or rather with friends. 
-
-
+Fare is closely related to passenger class as we expect passengers in class 1 to have higher fees than class 3. 
+Let's review this using box plot below. 
 
 ```{r}
-train %>% ggplot(aes(x = factor(status), fill = factor(Survived))) + geom_bar(position='dodge') + facet_grid(.~Pclass)
+train %>% ggplot(aes(x = Pclass, y = Fare, fill=Pclass)) + geom_boxplot() + facet_grid(~Survived) + theme_classic()
 ```
 
-From the above we can see if you are not passenger class 3 then people with families have higher chance to survive.
-Based on the above, I'm going to use this new field as another feature to use in prediction.
+After adding facet grid to split by survived factor, I notice there are some outliers in passenger class 3 that warrant further investigation. It seems to me there were passengers paying a bit more in class 3, probably because of last minutes booking or something else.  
 
+The summary of passenger class 3 below showing 3rd quantile around 15.5 whilst the max value is 69.55. There is a huge gap caused by these outliers. 
 
-# Machine Learning 
-Now, I'm going to put all the existing features and new ones to perform 10 fold validation using random forest. The outcome of this is around 84% accuracy 
 ```{r}
-# Machine learning one using 10 fold validation
+s <- train %>% filter(Pclass==3) %>% .$Fare
+summary(s)
+```
+
+I decided to find out a bit more on fare greater than 15.50 and group them by family size to see if I can find another interesting story from the data.
+I googled some of these families from the table below to find out a bit more information. Some of these fares included rail fares because New York was not their final destination. A lot of these families were plannning to migrate to United States going to various states or even Canada to start a better life. A lof of them came from other countries outside England as well and embarked from Southampton. 
+
+For example, the whole Anderson family perished with Titanic and they came from Sweden on the way to Canada. It's quite amazing I can find out all these names from dataset and google them to find out more stories about them. Now I know the reason of the outliers, I will include this feature in my modelling as it is without any further modification.
+
+
+```{r}
+train %>% filter(Pclass==3 & Fare>15.50) %>% select(Name, FamilySize, Age, Embarked) %>% arrange(desc(FamilySize,Name))
+```
+
+
+```{r}
+p <- train %>% filter(Fare<200) %>%
+  ggplot(aes(x = Fare, fill=Survived)) 
+
+p + geom_density(alpha=0.5) + labs(title="Fare Grouping") + theme_economist_white()
+```
+
+Based on the fare grouping plot above, we can see the threshold is around 9 dollars before your chance to survive getting better. I can probably create a two factor field based on this. 
+
+```{r}
+train$Fare2[train$Fare<10] <- 'Low Fare'
+train$Fare2[train$Fare>=10 & train$Fare<=200] <- 'Normal Fare'
+```
+
+There are some outliers beyond 90, let's see the plot to see how we can group this.
+
+```{r}
+p <- train %>% filter(Fare>200) %>%
+  ggplot(aes(x = Fare, fill=Survived)) 
+
+p + geom_density(alpha=0.5) + labs(title="Fare Grouping") + theme_economist_white()
+```
+
+I will create further two groups to cater between 200 to 300 and beyond 300 as per below code.
+```{r}
+train$Fare2[train$Fare>200 & train$Fare<=300] <- 'Outlier1'
+train$Fare2[train$Fare>300] <- 'Outlier2'
+```
+
+
+
+# 4. Machine Learning 
+
+After analysing all the features in Titanic dataset, I have finally come up with 5 final features :
+
+  * Pclass
+  * AgeGrp
+  * FamilySize
+  * Fare
+  * Sex
+  
+In the next section, I will be running a few algorithms using **_Caret_** to decide which one to choose. 
+
+
+# 4.1 Finding the best model
+
+The good thing about Caret, you can try multiple algorithms already included in this package.
+In here, I will try to apply some of the most popular algorithms below to decide which one I am going to use
+
+  * Decision Tree
+  * Random Forest
+  * XgBoost
+  * KNN
+  * Support Vector Machine
+  * GLM
+
+
+```{r}
+fit.rf <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rf", metric=metric, trControl=control)
+fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rpart", metric=metric, trControl=control)
+fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="glm", metric=metric, trControl=control)
+fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="knn", metric=metric, trControl=control)
+fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="xgbTree", metric=metric, trControl=control)
+fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="svmRadial", metric=metric,trControl=control)
+
+```
+
+
+```{r}
+
+set.seed(7)
+
+fit.rf <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rf")
+fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rpart")
+fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="glm")
+fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="knn")
+fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="xgbTree")
+fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="svmRadial")
+
+```
+
+```{r}
+# summarize accuracy of models
+
+set.seed(7)
+
+results <- resamples(list(DecisionTree=fit.rpart,RandomForest=fit.rf,XgBoost=fit.xgbTree,  KNN=fit.knn, SupportVector=fit.SVM, GLM=fit.glm))
+summary(results)
+```
+
+If you look at the results from Accuracy table, you can see Random Forest has the highest mean ouf of the other models. 
+
+We can probably plot the results to make it easier to visualise and see the best performing models for this exercise.
+
+As a result of this, I have decided to use **Random Forest** as my model to predict the outcome.  
+
+```{r}
+dotplot(results)
+```
+
+
+# 4.1 Random Forest with default setting
+
+Using the default setting in Caret for Random Forest, we can see the details of the best model. 
+The default parameter is mtry using values of 2,4 and 7. Mtry is basically random predictors chosen by the model when building various different trees. It is very interesting to see the best accuracy was achieved using 2 mtry (2 predictors) only.
+
+I can probably fine tune this since I have 5 features as my predictors so this can be changed instead of using default values. 
+
+```{r}
+print(fit.xgbTree)
+```
+
+The plot below shows the three default values in Random Forest and 2 predictos give the maximum accuracy around 83.7%.
+```{r}
+ggplot(fit.rf_final, highlight = TRUE)
+```
+
+Another function in caret called final model will show the error rate of 15.83%. This is basically related to our accurarcy of ~84% and hence the error rate is the residual around 16%. 
+```{r}
+fit.rf$finalModel
+```
+
+
+# 4.2 Fine tuning Random Forest
+
+I am going to change the parameter using below code to run from 2 to 5 features to find the best mtry and to improve accuracy from the the current rate of 83.7%. In addition, I am also going to increase my cross validation to 15 and repeating it 3 times to see if my result will improve.
+
+```{r}
+seq(2,5,1)
+```
+
+```{r}
+# Machine learning one using 7 fold validation
 library(caret)
 train$Survived <- factor(train$Survived)
+set.seed(7)
 
-
-# create 10 fold validation
-control <- trainControl(method="cv", number=10)
+# create 7 fold validation
+control <- trainControl(method="cv", number=5, p=0.8)
 metric <- "Accuracy"
 
 # Random Forest
-set.seed(7)
-fit.rf <- train(Survived ~ Sex + Pclass + AgeGrp + status + Fare, data=train, method="rf", metric=metric, trControl=control)
+fit.rf_final <- train(Survived ~  Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, metric=metric, method="rf", tuneGrid = data.frame(mtry = seq(2, 5, 1)), trControl=control)
 
 # print model
-print(fit.rf)
+print(fit.rf_final)
+
 ```
 
-Let's review how my prediction performs against training data and review the confusion matrix.
-My accuracy is 89.6% and balance accuracy is about 88%. So it is pretty good result and quite balanced in terms of predicting the outcome 1 or 0.
+```{r}
+ggplot(fit.rf_final, highlight = TRUE)
+```
+
+```{r}
+fit.rf$finalModel
+```
+
+As you can see from the above results, my accuracy improved to 83.9% and mtry changed from 2 to 3. 
+I am going to compare the results against the train data to validate the accuracy. The prediction is added to a new field called Survived2. 
+The accuracy is around 87% with balanced accuracy around 85% so this is a good result. I am not expecting the model to predict the outcome 100% since there were a lot of factors not captured in the dataset and I think to get around 80% accuracy is pretty good result already.
 
 
 ```{r}
-# based on the summary above, I decided to use random forest as my model
-# let's see confusion matrix against training data to see how accurate it is
-# put the result to another field called Survived2 and you prob will see accuracy around 84%, roughly about the same with 10 fold testing above
-
-train$Survived2 <- predict(fit.rf,train)
+train$Survived2 <- predict(fit.rf_final,train)
+train$Survived2 <- factor(train$Survived2)
 confusionMatrix(train$Survived2,train$Survived)
 ```
 
-I haven't done further analysis on **Fare** but this field indeed play a key role in improving my model accuracy as well as specificity. 
-In my model above, I have not done any further grouping to this field and simply just add that to my model. 
 
-I'm going to do further analysis to see if grouping will improve my model even more and bring me above current ranking in top 25%.
+## 4.3 Predicting the test dataset
 
-The first thing I do it to analyse why my model predicted 64 people to die where in fact they survive. 
-
-I use density to compare Fare so I can roughly figure out how to group the fare accurately. 
-There are outliers in the data so I filter out the data below 50 to see the trend clearly. It can be seen that when data is above 12, the curve showing the point where people will have higher chance to survive. I'm going to create a new categorical value <12 and >12 to see if my model is going to improve. 
-
-**Further testing needs to be done since the outcome is far worse than it was before. **
-
-# Validation against test data
-
-Now, I'm going to put the model against test data but need to add new categorical values to test data before running the prediction. 
+I am going to apply my prediction againt the test dataset which the model has not seen. 
+But first, I am going to fix some of the features such as family size and age group in test dataset. 
 
 ```{r}
-test$AgeGrp[test$Age<=12] <- 'Kids'
-test$AgeGrp[test$Age>12 & test$Age<=55] <- 'Adults'
-test$AgeGrp[test$Age>55] <- 'Seniors'
+test$FamilySize <- test$Parch + test$SibSp + 1
+
+
+test$AgeGrp[test$Age<=15] <- 'Kids'
+test$AgeGrp[test$Age>15 & test$Age<=59] <- 'Adults'
+test$AgeGrp[test$Age>59] <- 'Seniors'
 test$AgeGrp <- factor(test$AgeGrp)
 
+test$Fare2[test$Fare<10] <- 'Low Fare'
+test$Fare2[test$Fare>=10 & test$Fare<=200] <- 'Normal Fare'
+test$Fare2[test$Fare>200 & test$Fare<=300] <- 'Outlier1'
+test$Fare2[test$Fare>300] <- 'Outlier2'
 
-test$status <- 'Family'
-test$status[test$Parch==0 & test$SibSp==0] <- 'Single'
-test$status <- factor(test$status)
-test$status <- factor(test$status)
-
-summary(test)
 ```
 
+The final out come against test dataset showing accuracy of 81.3% with balanced accuracy about 78% so it is quite balanced in predicting 0 and 1. 
 
 ```{r}
-# now let's apply the model to test data
-test$Survived <-  predict(fit.rf,test)
+test$Survived2 <- predict(fit.rf_final,test)
+test$Survived2 <- factor(test$Survived2)
+confusionMatrix(test$Survived2,test$Survived)
 ```
 
 
-# Submission file to Kaggle to check final score. 
-```{r}
-submit <- data.frame(PassengerId = test$PassengerId, Survived = test$Survived)
-write.csv(submit, file = "titanic3.csv", row.names = FALSE)
-```
+
+
+
 
