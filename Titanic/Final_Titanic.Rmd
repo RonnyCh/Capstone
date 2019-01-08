@@ -555,7 +555,7 @@ In here, I will try to apply some of the most popular algorithms below to decide
 
 ## Testing with default values
 
-```{r, message=FALSE}
+```{r, message=FALSE, error=FALSE}
 
 set.seed(7)
 
@@ -564,7 +564,6 @@ fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=t
 fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="glm")
 fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="knn")
 fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="xgbTree")
-fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="svmRadial")
 
 ```
 
@@ -573,7 +572,7 @@ fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=tra
 
 set.seed(7)
 
-results <- resamples(list(DecisionTree=fit.rpart,RandomForest=fit.rf,XgBoost=fit.xgbTree,  KNN=fit.knn, SupportVector=fit.SVM, GLM=fit.glm))
+results <- resamples(list(DecisionTree=fit.rpart,RandomForest=fit.rf,XgBoost=fit.xgbTree,  KNN=fit.knn, GLM=fit.glm))
 summary(results)
 ```
 
