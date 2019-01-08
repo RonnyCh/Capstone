@@ -555,7 +555,7 @@ In here, I will try to apply some of the most popular algorithms below to decide
 
 ## Testing with default values
 
-```{r, message=FALSE}
+```{r, message=FALSE, error=FALSE}
 
 set.seed(7)
 
@@ -564,7 +564,6 @@ fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=t
 fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="glm")
 fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="knn")
 fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="xgbTree")
-fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="svmRadial")
 
 ```
 
@@ -573,7 +572,7 @@ fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=tra
 
 set.seed(7)
 
-results <- resamples(list(DecisionTree=fit.rpart,RandomForest=fit.rf,XgBoost=fit.xgbTree,  KNN=fit.knn, SupportVector=fit.SVM, GLM=fit.glm))
+results <- resamples(list(DecisionTree=fit.rpart,RandomForest=fit.rf,XgBoost=fit.xgbTree,  KNN=fit.knn, GLM=fit.glm))
 summary(results)
 ```
 
@@ -681,7 +680,12 @@ confusionMatrix(test$Survived2,test$Survived)
 
 ## 5. Conclusion
 
-Titanic dataset is a good exercise for beginner like myself to test since the dataset is not massive and a lot of people quite familiar with this tragedy. It is quite fascinating to see new insights you can get from data by applying different machine learning techniques. There are stories you can find from those insights and you can find out more on internet about some of the victims. Another thing I learnt as well, a good prediction depends on good data so do not expect to get good outcome from the best algorithms if your data is not good. In Titanic example, I believe the data is quite qood but not all factors included in the dataset. For example, cabin location is not very comprehensive and a lot of NAs in age requiring me to use average. In addition, some people were probably lucky to survive and it is not something you can factorised in your dataset. Machine learning helps provide information but sometimes it does not always give you 100% accuracy. 
+Titanic dataset is a good exercise for beginner like myself to test since the dataset is not big and a lot of people quite familiar with this event. I gathered a lot of insights from the dataset as well as stories about the victims after finding out their names from dataset. 
+
+Another thing I learnt, sometimes there are factors you can't predict since they are not captured in the dataset. After reviewing my outcome I notice some passengers survived despite having similar features to those who died. Some of these factors could be pure luck and some of them to do with issues with the dataset. For example, cabin location is not very comprehensive and a lot of NAs in age requiring me to use average. However, machine learning techniques still help provide valuable information and prediction despite limitations mentioned above. 
+
+My final prediction above 80% using random forest is quite impressive result considering missing data and the luck of some passengers to survive. It has been a great learning curve for me in the last 6 months and I have learnt a lot from the course materials provided by Professor Rafael Irizarry. Thanks for prodiving good and challenging materials for us to help us jumping into the world of data science. 
+
 
 
 
