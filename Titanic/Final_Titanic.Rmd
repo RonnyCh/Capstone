@@ -74,7 +74,7 @@ A quick check on the download data showing the class of each feature as well as 
 str(download)
 ```
 
-## 2.1 Reviewing downloaded data from Kaggle
+### 2.1 Reviewing Data from Kaggle
 
 After importing the data, I review the structure of the table to see what data wrangling required. 
 
@@ -100,7 +100,7 @@ summary(download$Embarked)
 
 
 
-## 2.2 Converting to factors
+### 2.2 Converting to Factors
 
 Both of these features (Survived and Pclass) have been converted to factors as per below code.
 ```{r}
@@ -116,7 +116,7 @@ str(download$Survived)
 str(download$Pclass)
 ```
 
-## 2.3 Removing NAs
+### 2.3 Removing NAs
 
 Both Age and Fare contain NAs values that have been replaced with mean values.
 
@@ -143,7 +143,7 @@ summary(download$Fare)
 ```
 
 
-## 2.4 Replacing missing embarkation points
+### 2.4 Replacing Missing Embarked
 
 Converting the two rows to default value S as most people embarked from Southampton.
 ```{r}
@@ -153,7 +153,7 @@ summary(download$Embarked)
 
 
 
-## 2.4 Splitting the data to train and test
+### 2.5 Partitioning Data
 
 Now, I will split the data to 80% training and 20% test. The below dim function confirms our dataset has now been partitioned properly.
 
@@ -186,7 +186,7 @@ table(train$Survived)
 However, we need to get more more insights on what sort of people survived this tragedy. I will be using ggplot to drill down further on different features to get more insights. 
 
 
-## 3.1 Sex
+### 3.1 Sex
 
 A the beginnning of this book, I put a block quote from Kaggle where it says women and kids were given priority to lifeboats. I will show the statistics from the dataset to prove the previous statement. 
 
@@ -258,7 +258,7 @@ train %>%
 The above plot gives us enough statistic to what we have discussed above in one great summary.  
 Hence, my initial assumption is correct for Titanic and gender is also a good feature for modelling since it has a really good split between died and survived. 
 
-## 3.2 Pclass 
+### 3.2 Pclass 
 
 Pclass is passenger class containing of 3 factors : 1,2 and 3. Passengers in class-1 pay more fees than class-2 and class-3. 
 I also expect higher classes to have better access to life boats and less crowded than lower classes. 
@@ -308,7 +308,7 @@ It does validate my assumptions as we can see if you happened to be in Titanic a
 
 Again, this is another good feature which can be used in my model later on to predict test dataset. 
 
-## 3.3 Family
+### 3.3 Family
 
 In Titanic dataset, there are two features that are quite similar :
 
@@ -372,7 +372,7 @@ train %>% filter(FamilySize>7) %>% select(Name,Sex,Age, FamilySize, Pclass) %>% 
 We found out from the results above, the two families were **_The Goodwin and The Sage_**. It also probably tells another story that bigger families struggled to get everyone on lifeboats and they probably sticked around to each other if they did not make it. Especially these two families were also in passenger class 3 and we know most people died in this class because of poor life support due to lower fares. 
 
 
-## 3.4 Embarked
+### 3.4 Embarked
 
 ```{r}
 TotalPassenger <- table(train$Embarked)
@@ -391,23 +391,15 @@ There were three embarkation points for Titanic :
  
 You can see from table, most people embarked from Southampton followed by Cherbourg and Queenstown. 
 I asked myself a question regarding this feature. Would it be logical to determine if someone survived based on his/her embarkation point?
-Initially, I was going to remove this feature from my model until I stumbled on this sample data below.
 
-If you look at the results in details you see a trend based on the same sex, pclass and family size. People embarked from Southampton had higher chance to die than people embarked from other ports. And this data is based on passenger class-3 and make me wondering why? The only thing I can think of is probably to do with the cabin location. Unfortunately, most of the rows have blank information in this field and I can't really use this field for my model. But, I believe people embarked from different ports for class-3 ended up in similar cabin locations in Titanic and unfortunately people from Southampton placed in locations where they were the hardest hit by iceberg. As a result of this, I will include embarked to be part of the features to determine if someone survived. 
-
-```{r}
-train %>% filter(Age==28 & Sex=='female' & Fare < 10) %>% select(Survived,Pclass,Name,Sex,Embarked,FamilySize) %>% arrange(desc(Embarked))
-```
-
-
-If you look at the plot below for passenger class-3, you will see the bar chart showing ~50% mark for Cherbourgh and Queenstown whilst Southampton was a lot worse than the other two.
 
 ```{r}
 train %>% ggplot(aes(x=Pclass, fill=Survived)) + geom_bar() + facet_wrap(~Embarked) + theme_economist_white() + labs(title="Passenger Class by Embarked")
 ```
 
+The plot above showing passengers Southampton had higher chance to die than people embarked from other ports. That is because most people from Southampton sat in class-3 and they also outnumbered passengers from other ports. Hence, I think passenger class is the key feature instead of where they embarked. This feature will not be used for my model to avoid overfitting by adding unecessary column for prediction. 
 
-# 3.5 Age
+### 3.5 Age
 
 The next feature I want to analyse a bit further is Age and need to figure out how to group the age to help machine learning use it as another categorical feature. 
 
@@ -470,7 +462,7 @@ train %>% ggplot(aes(x=AgeGrp, fill=Survived)) + geom_bar() + theme_economist_wh
 ```
 
 
-# 3.6 Fare
+### 3.6 Fare
 
 Fare is closely related to passenger class as we expect passengers in class 1 to have higher fees than class 3. 
 Let's review this using box plot below. 
@@ -527,7 +519,7 @@ train$Fare2[train$Fare>300] <- 'Outlier2'
 
 
 
-# 4. Machine Learning 
+## 4. Machine Learning 
 
 After analysing all the features in Titanic dataset, I have finally come up with 5 final features :
 
@@ -540,7 +532,7 @@ After analysing all the features in Titanic dataset, I have finally come up with
 In the next section, I will be running a few algorithms using **_Caret_** to decide which one to choose. 
 
 
-# 4.1 Finding the best model
+### 4.1 Finding the best model
 
 The good thing about Caret, you can try multiple algorithms already included in this package.
 In here, I will try to apply some of the most popular algorithms below to decide which one I am going to use
@@ -552,8 +544,7 @@ In here, I will try to apply some of the most popular algorithms below to decide
   * Support Vector Machine
   * GLM
 
-
-## Testing with default values
+I use caret to train the above algorithms using default values without any tuning. 
 
 ```{r, message=FALSE, error=FALSE}
 
@@ -587,7 +578,7 @@ dotplot(results)
 ```
 
 
-# 4.1 Random Forest with default setting
+### 4.2 Best Model - Random Forest 
 
 Using the default setting in Caret for Random Forest, we can see the details of the best model. 
 The default parameter is mtry using values of 2,4 and 6. Mtry is basically random predictors chosen by the model when building various different trees. We can see the best accuracy was achieved using mtry of 2.
@@ -602,7 +593,7 @@ ggplot(fit.rf, highlight = TRUE)
 ```
 
 
-# 4.2 Fine tuning Random Forest
+### 4.3 Tuning Random Forest
 
 I am going to change the parameter using below code to run from 2 to 5 features to find the best mtry and to improve accuracy from the the current rate of 81.9%. 
 The control function is changed to run 5 times against 20% of data to validate the accuracy of my model. In the below table, you can see accuracy improved to 82.6% and mtry reduced from 5 to 4. 
@@ -649,7 +640,7 @@ confusionMatrix(train$Survived2,train$Survived)
 ```
 
 
-## 4.3 Final - Predicting the test dataset
+### 4.4 Final - Predicting Test Data
 
 Now, I am going to apply my prediction againt the test dataset which the model has not seen. 
 But first, I am going to fix some of the features such as family size and age group in test dataset. 
