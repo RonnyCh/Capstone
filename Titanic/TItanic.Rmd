@@ -69,6 +69,8 @@ download <- read.csv("train.csv")
 ```
 
 
+### i'm changing something here!!!!! delete later
+
 A quick check on the download data showing the class of each feature as well as number of observations and variables.
 ```{r}
 str(download)
