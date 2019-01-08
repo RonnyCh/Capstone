@@ -31,7 +31,7 @@ The dataset contains 9 features as per below to predict label **_survival_** :
 
 For more information on the definitions of those features [please click here](https://www.kaggle.com/c/titanic/data)
 
-We have learnt some of the techniques below in the last 6 months or so and I will use them to predict the outcome of **_Titanic Survival Challenge_**.  
+In this book, I will be demonstrating some of the techniques below which we have covered in the last 6 months.
 
  * Data Wrangling  
  * Caret Package  
@@ -80,20 +80,20 @@ After importing the data, I review the structure of the table to see what data w
 
  * Survived and Pclass are currently integer but can be converted to factors
  
- * The Age feature has  a lot of NAs, in this case 177.
+ * The Age feature has 177 NAs as can be seen below. 
  
 ```{r}
 summary(download$Age)
 ```
  
  
- * Fare has some outliers where you can see max value is a lot higher than mean and median
+ * Fare has some outliers which will be explained later on in this book.
  
 ```{r}
 summary(download$Fare)
 ```
 
- * There are two entries missing embarkation points
+ * There are two missing embarkation points that need to be fixed. 
 ```{r}
 summary(download$Embarked)
 ```
@@ -102,22 +102,23 @@ summary(download$Embarked)
 
 ## 2.2 Converting to factors
 
-Both Survived and Pclass have now been converted to factors as can be seen below
+Both of these features (Survived and Pclass) have been converted to factors as per below code.
 ```{r}
 
 # convert train dataset
 download$Survived <- factor(download$Survived)
 download$Pclass <- factor(download$Pclass)
-
-str(download$Survived)
-str(download$Pclass)
-
 ```
 
+Quick check on both features showing they are both factors. 
+```{r}
+str(download$Survived)
+str(download$Pclass)
+```
 
 ## 2.3 Removing NAs
 
-I will replace all these NAs with mean values for each field.
+Both Age and Fare contain NAs values that have been replaced with mean values.
 
 ```{r}
 # fix NAs for Age
@@ -131,12 +132,12 @@ download$Fare <- replace(download$Fare,is.na(download$Fare),avg)
 ```
 
 
-  * Confirmed no more NAs in Age
+Running summary function for both features showing no more NAs. 
+
 ```{r}
 summary(download$Age)
 ```
 
-  * Confirmed no more NAs in Fare
 ```{r}
 summary(download$Fare)
 ```
@@ -187,7 +188,7 @@ However, we need to get more more insights on what sort of people survived this 
 
 ## 3.1 Sex
 
-Generally during any major disasters, women and kids will be given priority whilst the men will do the hardwork to help others escape the disasters. 
+A the beginnning of this book, I put a block quote from Kaggle where it says women and kids were given priority to lifeboats. I will show the statistics from the dataset to prove the previous statement. 
 
 
 ```{r}
@@ -259,7 +260,7 @@ Hence, my initial assumption is correct for Titanic and gender is also a good fe
 
 ## 3.2 Pclass 
 
-Pclass is passenger class containing of 3 factors : 1,2 and 3. Passengers in class 1 pay more fees than class 2 and 3. 
+Pclass is passenger class containing of 3 factors : 1,2 and 3. Passengers in class-1 pay more fees than class-2 and class-3. 
 I also expect higher classes to have better access to life boats and less crowded than lower classes. 
 Let's anaylse the plot below to see if I can validate the above assumptions against training data.
 
@@ -299,9 +300,9 @@ train %>%
 
 From the above plot, we can see the following :  
 
- * 63% of passengers in class 1 survived  
- * 47% of passengers in class 2 survived  
- * 25% of passengers in class 3 survived  
+ * 63% of passengers in class-1 survived  
+ * 47% of passengers in class-2 survived  
+ * 25% of passengers in class-3 survived  
 
 It does validate my assumptions as we can see if you happened to be in Titanic at that time and bought a ticket in passenger class 3, then you were most likely not going to survive. 
 
@@ -507,11 +508,6 @@ p + geom_density(alpha=0.5) + labs(title="Fare Grouping") + theme_economist_whit
 
 Based on the fare grouping plot above, we can see the threshold is around 9 dollars before your chance to survive getting better. I can probably create a two factor field based on this. 
 
-```{r}
-train$Fare2[train$Fare<10] <- 'Low Fare'
-train$Fare2[train$Fare>=10 & train$Fare<=200] <- 'Normal Fare'
-```
-
 There are some outliers beyond 90, let's see the plot to see how we can group this.
 
 ```{r}
@@ -521,8 +517,10 @@ p <- train %>% filter(Fare>200) %>%
 p + geom_density(alpha=0.5) + labs(title="Fare Grouping") + theme_economist_white()
 ```
 
-I will create further two groups to cater between 200 to 300 and beyond 300 as per below code.
+Based on the above two plots, I finally can create grouping to factorise fare as per below code. 
 ```{r}
+train$Fare2[train$Fare<10] <- 'Low Fare'
+train$Fare2[train$Fare>=10 & train$Fare<=200] <- 'Normal Fare'
 train$Fare2[train$Fare>200 & train$Fare<=300] <- 'Outlier1'
 train$Fare2[train$Fare>300] <- 'Outlier2'
 ```
@@ -536,7 +534,7 @@ After analysing all the features in Titanic dataset, I have finally come up with
   * Pclass
   * AgeGrp
   * FamilySize
-  * Fare
+  * Fare2
   * Sex
   
 In the next section, I will be running a few algorithms using **_Caret_** to decide which one to choose. 
@@ -555,27 +553,18 @@ In here, I will try to apply some of the most popular algorithms below to decide
   * GLM
 
 
-```{r}
-fit.rf <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rf", metric=metric, trControl=control)
-fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rpart", metric=metric, trControl=control)
-fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="glm", metric=metric, trControl=control)
-fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="knn", metric=metric, trControl=control)
-fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="xgbTree", metric=metric, trControl=control)
-fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="svmRadial", metric=metric,trControl=control)
+## Testing with default values
 
-```
-
-
-```{r}
+```{r, message=FALSE}
 
 set.seed(7)
 
-fit.rf <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rf")
-fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="rpart")
-fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="glm")
-fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="knn")
-fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="xgbTree")
-fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare + Embarked, data=train, method="svmRadial")
+fit.rf <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="rf")
+fit.rpart <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="rpart")
+fit.glm <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="glm")
+fit.knn <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="knn")
+fit.xgbTree <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="xgbTree")
+fit.SVM <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, method="svmRadial")
 
 ```
 
@@ -602,28 +591,22 @@ dotplot(results)
 # 4.1 Random Forest with default setting
 
 Using the default setting in Caret for Random Forest, we can see the details of the best model. 
-The default parameter is mtry using values of 2,4 and 7. Mtry is basically random predictors chosen by the model when building various different trees. It is very interesting to see the best accuracy was achieved using 2 mtry (2 predictors) only.
-
-I can probably fine tune this since I have 5 features as my predictors so this can be changed instead of using default values. 
+The default parameter is mtry using values of 2,4 and 6. Mtry is basically random predictors chosen by the model when building various different trees. We can see the best accuracy was achieved using mtry of 2.
 
 ```{r}
-print(fit.xgbTree)
+print(fit.rf)
 ```
 
-The plot below shows the three default values in Random Forest and 2 predictos give the maximum accuracy around 83.7%.
+The plot below shows the three default values in Random Forest and 2 predictos give the maximum accuracy around 81.9%.
 ```{r}
-ggplot(fit.rf_final, highlight = TRUE)
-```
-
-Another function in caret called final model will show the error rate of 15.83%. This is basically related to our accurarcy of ~84% and hence the error rate is the residual around 16%. 
-```{r}
-fit.rf$finalModel
+ggplot(fit.rf, highlight = TRUE)
 ```
 
 
 # 4.2 Fine tuning Random Forest
 
-I am going to change the parameter using below code to run from 2 to 5 features to find the best mtry and to improve accuracy from the the current rate of 83.7%. In addition, I am also going to increase my cross validation to 15 and repeating it 3 times to see if my result will improve.
+I am going to change the parameter using below code to run from 2 to 5 features to find the best mtry and to improve accuracy from the the current rate of 81.9%. 
+The control function is changed to run 5 times against 20% of data to validate the accuracy of my model. In the below table, you can see accuracy improved to 82.6% and mtry reduced from 5 to 4. 
 
 ```{r}
 seq(2,5,1)
@@ -640,7 +623,7 @@ control <- trainControl(method="cv", number=5, p=0.8)
 metric <- "Accuracy"
 
 # Random Forest
-fit.rf_final <- train(Survived ~  Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, metric=metric, method="rf", tuneGrid = data.frame(mtry = seq(2, 5, 1)), trControl=control)
+fit.rf_final <- train(Survived ~ Sex + Pclass + AgeGrp + FamilySize + Fare2, data=train, metric=metric, method="rf", tuneGrid = data.frame(mtry = seq(2, 5, 1)), trControl=control)
 
 # print model
 print(fit.rf_final)
@@ -652,12 +635,12 @@ ggplot(fit.rf_final, highlight = TRUE)
 ```
 
 ```{r}
-fit.rf$finalModel
+fit.rf_final$finalModel
 ```
 
-As you can see from the above results, my accuracy improved to 83.9% and mtry changed from 2 to 3. 
-I am going to compare the results against the train data to validate the accuracy. The prediction is added to a new field called Survived2. 
-The accuracy is around 87% with balanced accuracy around 85% so this is a good result. I am not expecting the model to predict the outcome 100% since there were a lot of factors not captured in the dataset and I think to get around 80% accuracy is pretty good result already.
+
+I am going to compare the results against the train data to validate the accuracy. The prediction is added to a new field called **Survived2**. 
+The accuracy is around 84.7% with balanced accuracy around 82.7% so this is a good balance in predicting 0 and 1. I am not expecting the model to predict the outcome 100% since there were a lot of factors not captured in the dataset and I think to get around 80% accuracy is pretty good result.
 
 
 ```{r}
@@ -667,9 +650,9 @@ confusionMatrix(train$Survived2,train$Survived)
 ```
 
 
-## 4.3 Predicting the test dataset
+## 4.3 Final - Predicting the test dataset
 
-I am going to apply my prediction againt the test dataset which the model has not seen. 
+Now, I am going to apply my prediction againt the test dataset which the model has not seen. 
 But first, I am going to fix some of the features such as family size and age group in test dataset. 
 
 ```{r}
@@ -688,13 +671,18 @@ test$Fare2[test$Fare>300] <- 'Outlier2'
 
 ```
 
-The final out come against test dataset showing accuracy of 81.3% with balanced accuracy about 78% so it is quite balanced in predicting 0 and 1. 
+The final out come against test dataset showing accuracy of 80.8% with balanced accuracy about 78.6%. I hope this gives a good overview of what I have learned in this course and demostrating my new skills in applying machine learning prediction using R. Thanks for reading this book and I hope you also leart a thing or two from me as well.  
 
 ```{r}
 test$Survived2 <- predict(fit.rf_final,test)
 test$Survived2 <- factor(test$Survived2)
 confusionMatrix(test$Survived2,test$Survived)
 ```
+
+## 5. Conclusion
+
+Titanic dataset is a good exercise for beginner like myself to test since the dataset is not massive and a lot of people quite familiar with this tragedy. It is quite fascinating to see new insights you can get from data by applying different machine learning techniques. There are stories you can find from those insights and you can find out more on internet about some of the victims. Another thing I learnt as well, a good prediction depends on good data so do not expect to get good outcome from the best algorithms if your data is not good. In Titanic example, I believe the data is quite qood but not all factors included in the dataset. For example, cabin location is not very comprehensive and a lot of NAs in age requiring me to use average. In addition, some people were probably lucky to survive and it is not something you can factorised in your dataset. Machine learning helps provide information but sometimes it does not always give you 100% accuracy. 
+
 
 
 
