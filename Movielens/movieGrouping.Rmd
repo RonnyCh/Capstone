@@ -3,347 +3,144 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-
-# pick up some movies to make data smaller for testing
-
+use top 10 from validation as a test
 ```{r}
-train_small <- validation %>% 
-  group_by(movieId) %>%
-  filter(n() >= 50) %>% ungroup() %>% 
-  group_by(userId) %>%
-  filter(n() >= 50) %>% ungroup()
+library(dplyr)
+mymovie <- validation %>% 
+  group_by(movieId,title) %>%
+  filter(n() >= 50) %>% summarise(count=n()) %>% filter(count>2750)
+```
 
-y <- train_small %>% 
-  select(userId, movieId, rating) %>%
-  spread(movieId, rating) %>%
-  as.matrix()
+use the mapping above against edx
+```{r}
+mytrain <- edx %>% left_join(mymovie,by='movieId') %>% filter(!is.na(title.y)) 
+dim(mytrain)
+```
 
-rownames(y)<- y[,1]
-y <- y[,-1]
-
-movie_titles <- movielens %>% 
-  select(movieId, title) %>%
-  distinct()
-
-colnames(y) <- with(movie_titles, title[match(colnames(y), movieId)])
-#y_test[is.na(y_test)] <- 0
-#sds <- colSds(x)
-#qplot(sds, bins = 4, color = I("black"))
-
+## movie avg and user avg
+```{r}
+mu = mean(mytrain$rating)
+movieAvg <- mytrain %>% group_by(movieId) %>% summarise(b_m = mean(rating-mu))
+userAvg <- mytrain %>% left_join(movieAvg,by='movieId') %>% group_by(userId) %>% summarise(b_u = mean(rating-b_m-mu))
 ```
 
 
-filtering to test with PCA, e.g users with rating 5
-```{r}
-mymovie <- train_small %>% filter(rating<2) %>% group_by(genres,movieId,title) %>% summarise(count=n()) %>%  arrange(desc(count)) %>% .$title
+#prediction
 
-train_small %>% filter(rating<2) %>% group_by(genres,movieId,title) %>% summarise(count=n()) %>%  arrange(desc(count))
+
+# steps...
+
+# 1. find residual using below code
+# 2. map it to p and q see below... 
+# need to expand this table below to encompass more movies.
+
+```{r}
+pred <- mytrain %>% left_join(movieAvg,by='movieId') %>% left_join(userAvg,by='userId') %>% mutate(mu=mu,prediction=mu+b_u+b_m, residual=rating-prediction) %>% select(userId, movieId,title = title.x, mu, b_m,b_u,prediction,rating,residual,count) 
+dim(pred)
+head(pred)
 ```
 
 ```{r}
-edx %>% group_by(movieId,title, rating) %>% filter(title=='Seven (a.k.a. Se7en) (1995)') %>% summarise(n())
+#pred %>% arrange(user,movie)
+pred %>% filter(title.y=='Pulp Fiction (1994)') %>% .$residual %>% hist()
 ```
 
-
-create a vector of dumb comedy
+Working out lambda on histogram above for pulf fiction (comedy|crime|drama) to minimise the variance
 ```{r}
-q <- matrix(c(1 , 1, 1, -1, -1), ncol=1)
-rownames(q) <- c("Ace Ventura: Pet Detective (1994)", "Ace Ventura: When Nature Calls (1995)")
-```
-
-
-
-# you can select a few columns or all columns for your PCA.
-
-# you can use the code below to filter specific movies and find the index
-```{r}
-mymovie[which(str_detect(mymovie,'Ace Ventura'))]
-
-```
-
-
-```{r}
-cor(y2)
-```
-
-
-```{r}
-m_1 <- "American Pie (1999)"
-m_2 <- "American Pie 2 (2001)"
-qplot(y2[ ,m_1], y2[,m_2], xlab = m_1, ylab = m_2)
-```
-
-
-m_1 <- "Godfather, The"
-m_2 <- "Godfather: Part II, The"
-qplot(y[ ,m_1], y[,m_2], xlab = m_1, ylab = m_2)
-
-
-```{r}
-#y2 <- y[,mymovie[c(1:30,41,79,257,302,754,901,321,1572,1819,2139)]]
-
-y2 <- y[,1:50]
-```
-
-# create residual
-```{r}
-y2 <- sweep(y2, 2, colMeans(y2, na.rm=TRUE))
-y2 <- sweep(y2, 1, rowMeans(y2, na.rm=TRUE))
-y2[is.na(y2)] <- 0
-```
-
-
-check residual
-```{r}
-
-library(matrixStats)
-avgResidual <- rowMeans(y2)
-qplot(avgResidual, bins = 2500, color = I("black"))
-
-#sds
-```
-
-# data wrangling through matrix
-
-I'm trying to figure out how to filter this data since at total level they are offsetting each other.
-
-```{r}
-myval <- y2[,'Pulp Fiction (1994)']
-
-overallRating <- edx %>% group_by(movieId,title) %>% filter(title=='Pulp Fiction (1994)') %>% summarise(mean(rating), n())
-
-#dim(as.matrix(myval))
-userA <- which(myval>0 & myval<2)
-
-myval[5]  # same result as below
-
-y2['125',216] # same result as above
-
-# to find col index for Thinner 1996 do the following 
-which(colnames(y)=='Pulp Fiction (1994)')
-
-```
-
-
-
-
-#PCA
-```{r}
-y2[is.na(y2)] <- 0
-pca <- prcomp(y2)
-
-dim(pca$rotation)   # movie effect
-dim(pca$x)  # user effect
-
-plot(pca$sdev)
-```
-
-
-```{r}
-b <- data.frame(pca$x, name = rownames(y2))
-```
-
-
-```{r}
-library(ggrepel)
-
-pcs <- data.frame(pca$rotation, name = colnames(y2))
-
-highlight <- filter(pcs, PC1 < -0.1 | PC1 > 0.1 | PC2 < -0.075 | PC2 > 0.1)
-
-pcs %>%  ggplot(aes(PC1, PC2)) + geom_point() + 
-  geom_text_repel(aes(PC1, PC2, label=name),
-                  data = highlight, size = 3)
+dim(pred)
+lambda <- pred %>% filter(residual> 0.5 | residual < -0.5) 
+dim(lambda)
 ```
 
 ```{r}
-pcs %>% select(name, PC1) %>% arrange(PC1) %>% slice(1:15)
-pcs %>% select(name, PC1) %>% arrange(desc(PC1)) %>% slice(1:15)
+head(lambda)
 ```
 
-#clustering
+#clustering lambda by users
 ```{r}
-top <- edx %>%
-  group_by(movieId) %>%
-  summarize(n=n(), title = first(title)) %>%
-  top_n(50, n) %>%
-  .$movieId
 
-x <- edx %>% 
-  filter(movieId %in% top) %>%
-  group_by(userId) %>%
-  filter(n() >= 25) %>%
-  ungroup() %>% 
-  select(title, userId, rating) %>%
-  spread(userId, rating)
+c_user <- lambda %>% select(userId,movieId,rating) %>% spread(movieId,rating)
+rownames(c_user) <- c_user[,1] 
+c_user <- c_user[,-1]
+c_user[is.na(c_user)] <- 0
 
-row_names <- str_remove(x$title, ": Episode") %>% str_trunc(20)
-x <- x[,-1] %>% as.matrix()
-x <- sweep(x, 2, colMeans(x, na.rm = TRUE))
-x <- sweep(x, 1, rowMeans(x, na.rm = TRUE))
-rownames(x) <- row_names
-```
-
-```{r}
-d <- dist(x)
-h <- hclust(d)
-plot(h, cex = 0.75)
-
-groups <- cutree(h, k = 10)
-split(names(groups), groups)
-```
-
-```{r}
-h_2 <- dist(t(x)) %>% hclust()
-```
-
-
-```{r}
-x_0 <- x
-x_0[is.na(x_0)] <- 0
-
-k <- kmeans(x_0, centers = 10, nstart = 25)
+k <- kmeans(c_user, centers = 10, nstart=1)
 groups <- k$cluster
-split(names(groups), groups)
+myuser <- split(names(groups), groups)
+
+# convert to dataframe
+p <- ldply (myuser, data.frame)
+colnames(p) <- c('p','userId')
+p$userId <- as.numeric(as.character(p$userId))
+head(p)
 ```
 
 
-
-
-#recommender app
-
-# SPLIT DATA 
+# clustering lambda by movies
 ```{r}
-set.seed(1)
-library(caret)
-index <- createDataPartition(edx$rating,times =1,p=0.8,list=FALSE)
+#library(plyr)
+c_movie <- t(c_user)
 
-train <- edx[index,]
-test <- edx[-index,]
+k <- kmeans(c_movie, centers = 5, nstart=1)
+groups <- k$cluster
+mylist <- split(names(groups), groups)
 
-test <- test %>% 
-  semi_join(train, by = "movieId") %>%
-  semi_join(train, by = "userId")
-
-dim(train)
-dim(test)
+# convert to dataframe
+q <- ldply (mylist, data.frame)
+colnames(q) <- c('q','movieId')
+q$movieId <- as.numeric(as.character(q$movieId))
 
 ```
 
-# create y matrix 
 
+# create pq map.... 
+# q = movie and there are 3 groupings
+# p = users and there are 10 groupings
+# below code should look after positive and negative
 ```{r}
-train_small <- train %>% 
-  group_by(movieId) %>%
-  filter(n() >= 50) %>% ungroup() %>% 
-  group_by(userId) %>%
-  filter(n() >= 50) %>% ungroup()
+pq_map <- lambda %>% select(userId,movieId,title.y,rating,residual) %>% left_join(q,by='movieId') %>% left_join(p,by='userId')%>%group_by(q,p) %>% summarise(lamda=mean(residual)) %>% arrange(lamda)
+```
 
-y <- train_small %>% 
-  select(userId, movieId, rating) %>%
-  spread(movieId, rating) %>%
-  as.matrix()
 
-rownames(y)<- y[,1]
-y <- y[,-1]
-
-movie_titles <- train %>% 
-  select(movieId, title) %>%
-  distinct()
-
-colnames(y) <- with(movie_titles, title[match(colnames(y), movieId)])
-#y_test[is.na(y_test)] <- 0
-#sds <- colSds(x)
-#qplot(sds, bins = 4, color = I("black"))
+# use the code below to get verify p q calculation and to make sense of it. Amend it as required. !!
+```{r}
+lambda %>% select(userId,movieId,title.y,rating,residual) %>% left_join(q,by='movieId') %>% left_join(p,by='userId')%>%filter(q==4&p==1)%>% head(40)
 
 ```
 
 
-# put the initial matrix to a second matrix called y2
+
+
+# applying mapping to prediction table
+```{r}
+pred_final <- pred %>% left_join(movieAvg,by='movieId') %>% left_join(userAvg,by='userId') %>% left_join(q,by='movieId') %>% left_join(p,by='userId') %>% left_join(pq_map, by=c('q','p')) %>% select(userId,movieId,title,rating,prediction,residual,lamda,q,p)
+pred_final$lamda[is.na(pred_final$lamda)] <- 0
+pred_final <- pred_final %>% mutate(final_rating = round(prediction + lamda,3), final_res=final_rating-rating)
+head(pred_final)
+```
 
 ```{r}
-
-y2 <- as(y, "realRatingMatrix")
-rec <- Recommender(y2, method = "POPULAR")
+#pred %>% arrange(user,movie)
+pred_final %>% filter(title=='Forrest Gump (1994)') %>% .$residual %>% hist()
+pred_final %>% filter(title=='Forrest Gump (1994)') %>% .$final_res %>% hist()
 ```
 
-
-# predict the outcome for users in row 8 to 10 
+### this is the final sample... keep working on this... to understand how well your lamda works.!!!
 ```{r}
-pre <- predict(rec, y2[8:10], type="ratings")
-pre
-as(pre, "matrix")[,1:10]
+lambda %>% select(userId,movieId,title.y,rating,residual) %>% left_join(q,by='movieId') %>% left_join(p,by='userId')%>%group_by(q,p) %>% filter(q==4&p==1) %>% summarise(lamda=mean(residual)) %>% arrange(lamda)
 
+
+pred_final %>% filter(q==4&p==1) %>% mutate(finalrating=round(prediction+lamda,2)) %>% select(rating,prediction,finalrating)
 ```
 
 
-# there are a few ways you can convert results to list, data frame etc.... see below
-```{r}
-#as(pre,"list")
-matrix <- as(pre,"matrix")
-df <- as(pre,"data.frame")
-
-df %>% filter(user==19 & str_detect(item,'Wizard of Oz')) %>% arrange(item)
-
-#print(rec)
-##names(getModel(rec))
-#getModel(rec)$nn
-
-```
-
-# check the results against validation data and see how accurate they are? NOT THAT MUCH DIFFERENT FROM NORMAL BIAS FROM WHAT I CAN SEE SO FAR!!!!
-```{r}
-
-validation %>% filter(userId==19) %>% arrange(title)
-
-```
 
 
-# you can change column names to tidy up..... ISSUE!!!! different type for userid (factor vs integet)    >>>>>> can't convert due to error mesages.... check later!!!
-```{r}
-colnames(df) <- c('userId','title','rating')   # change the column names
-head(df)
-
-```
 
 
-# FINALLLYYY >>>>>>> how to query results
-```{r}
-as(pre,"matrix")[,1:10]     # all users for movies 1 to 10
-as(pre,"matrix")[3,2]         # users at row 3 and column 2
-
-as.integer(as(pre,"matrix")[3,2] )        # rounding to integer numbers
-
-```
-
-# and yeah the FUCKING!!! LIST ..... here we go!!!! arggg finally
-```{r}
-mylist <- as(pre,"list")
-
-# user 1 at index 3
-mylist[[1]][3]
-
-```
 
 
-# convert to data frame for user 1
-```{r}
-u1 <- as.data.frame(mylist[[1]])
-#attributes(u1)
-#class(u1)
 
-# add column name
-u1$id <- row.names(u1)
 
-head(u1)
 
-colnames(u1) <- c('Rating','id')
-head(u1)
-```
-
-# don't know what this thing do.... check later if required!!! but for now.... dont worry!!!
-```{r}
-image(pre,main="Raw Ratings")
-image(pre,main="Normalized Ratings")
-```
 
